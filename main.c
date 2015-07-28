@@ -26,12 +26,92 @@ void* input(void *data)
 		exit(EXIT_FAILURE);
 	}
 
+	snd_pcm_hw_params_t *params;
+	snd_pcm_hw_params_alloca(&params);
+	snd_pcm_hw_params_any(handle, params);
+	snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
+	snd_pcm_hw_params_set_format(handle, params, SND_PCM_FORMAT_S16_LE);
+	snd_pcm_hw_params_set_channels(handle, params, 2);
+	int dir;
+	unsigned int rate = 44100;
+	snd_pcm_hw_params_set_rate_near(handle, params, &rate, &dir);
+	snd_pcm_uframes_t frames = 256;
+	snd_pcm_hw_params_set_period_size_near(handle, params, &frames, &dir);
+
+	status = snd_pcm_hw_params(handle, params);
+	if(status < 0){
+		fprintf(stderr, "Unable to set hardware parameters: %s\n", snd_strerror(status));
+		exit(EXIT_FAILURE);
+	}
+
+	snd_pcm_format_t format;
+	snd_pcm_hw_params_get_format(params, &format);
+
+	if(format < 6){
+		audio->format = 16;
+	}else if(format < 10){
+		audio->format = 24;
+	}else{
+		audio->format = 32;
+	}
+
+	snd_pcm_hw_params_get_rate(params, &audio->rate, &dir);
+	snd_pcm_hw_params_get_period_size(params, &frames, &dir);
+	unsigned int time;
+	snd_pcm_hw_params_get_period_time(params, &time, &dir);
+
+	int size = frames * (audio->format >> 3) << 1;
+	printf("Buffer size: %d\n", size);
+	char *buf = (char*)malloc(size);
+
+	int adjustr = audio->format >> 2;
+	int adjustl = audio->format >> 3;
+
+	int framecount = 0;
+	while(1){
+		status = snd_pcm_readi(handle, params, frames);
+		if(status == -EPIPE){
+			snd_pcm_prepare(handle);
+		}
+
+		int i;
+		for(i = 0; i < size; i = i + (adjustl << 1)){
+			int right = buf[i + adjustr - 1] << 2;
+			int lo = buf[i + adjustr - 2] >> 6; // lo = ?
+			if(lo < 0){
+				lo = -lo + 1;
+			}
+			if(right >= 0){
+				right += lo;
+			}else{
+				right -= lo;
+			}
+
+			int left = buf[i + adjustl - 1] << 2;
+			lo = buf[i + adjustl - 2] >> 6; // lo = ?
+			if(lo < 0){
+				lo = -lo + 1;
+			}
+			if(left >= 0){
+				left += lo;
+			}else{
+				left -= lo;
+			}
+
+			audio->out[framecount++] = (right + left) >> 1;
+
+			if(framecount == BUFFER_SIZE - 1){
+				framecount = 0;
+			}
+		}
+	}
+
 	return NULL;
 }
 
 int main(int argc, char **argv)
 {
-	audiodata_t audio;
+	audiodata_t audio = {.rate = 0, .format = -1, .source = NULL};
 
 	int i;
 	for(i = 0; i < BUFFER_SIZE; i++){
@@ -39,16 +119,23 @@ int main(int argc, char **argv)
 	}
 
 	int c;
-	while((c = getopt(argc, argv, "s")) != -1){
+	while((c = getopt(argc, argv, ":d:")) != -1){
 		switch(c){
-			case 's':
+			case 'd':
 				audio.source = optarg;
 				break;
 		}
 	}
 
+	if(audio.source == NULL){
+		printf("No valid ALSA source is supplied\n");
+		return 1;
+	}
+
 	pthread_t thread;
-	int id = pthread_create(&thread, NULL, input, (void*)&audio);
+	pthread_create(&thread, NULL, input, (void*)&audio);
+
+	while(1);
 
 	return 0;
 }
