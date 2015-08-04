@@ -17,6 +17,9 @@ typedef struct {
 	char *source;
 } audiodata_t;
 
+pthread_mutex_t mutex;
+pthread_cond_t cond;
+
 void* input(void *data)
 {
 	audiodata_t *audio = (audiodata_t*)data;
@@ -76,6 +79,8 @@ void* input(void *data)
 			snd_pcm_prepare(handle);
 		}
 
+		pthread_mutex_lock(&mutex);
+
 		int i;
 		for(i = 0; i < size; i = i + (adjustl << 1)){
 			int right = buf[i + adjustr - 1] << 2;
@@ -106,6 +111,9 @@ void* input(void *data)
 				framecount = 0;
 			}
 		}
+
+		pthread_cond_signal(&cond);
+		pthread_mutex_unlock(&mutex);
 	}
 
 	return NULL;
@@ -134,6 +142,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	pthread_mutex_init(&mutex, NULL);
+	pthread_cond_init(&cond, NULL);
+
 	pthread_t thread;
 	pthread_create(&thread, NULL, input, (void*)&audio);
 
@@ -143,9 +154,13 @@ int main(int argc, char **argv)
 
 	while(1){
 		int i;
+		pthread_mutex_lock(&mutex);
+		pthread_cond_wait(&cond, &mutex);
 		for (i = 0; i < BUFFER_SIZE; i++) {
 			in[i] = audio.out[i];
 		}
+		pthread_mutex_unlock(&mutex);
+
 		fftw_execute(plan);
 
 		double peak = 0;
@@ -163,5 +178,6 @@ int main(int argc, char **argv)
 
 	fftw_destroy_plan(plan);
 
-	return 0;
+	pthread_mutex_destroy(&mutex);
+	pthread_exit(NULL);
 }
