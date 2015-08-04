@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
+#include <fftw3.h>
 
 #include <pthread.h>
 
@@ -69,7 +70,7 @@ void* input(void *data)
 
 	int framecount = 0;
 	while(1){
-		status = snd_pcm_readi(handle, params, frames);
+		status = snd_pcm_readi(handle, buf, frames);
 		if(status == -EPIPE){
 			snd_pcm_prepare(handle);
 		}
@@ -135,7 +136,23 @@ int main(int argc, char **argv)
 	pthread_t thread;
 	pthread_create(&thread, NULL, input, (void*)&audio);
 
-	while(1);
+	double in[2 * (BUFFER_SIZE / 2 + 1)];
+	fftw_complex out[BUFFER_SIZE / 2 + 1][2];
+	fftw_plan plan;
+
+	plan = fftw_plan_dft_r2c_1d(BUFFER_SIZE, in, *out, FFTW_MEASURE);
+
+	while(1){
+		int i;
+		for (i = 0; i < (2 * (BUFFER_SIZE / 2 + 1)); i++) {
+			if (i < BUFFER_SIZE) {
+				in[i] = audio.out[i];
+			} else {
+				in[i] = 0;
+			}
+		}
+		fftw_execute(plan);
+	}
 
 	return 0;
 }
