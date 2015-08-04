@@ -1,11 +1,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
+
 #include <getopt.h>
+
 #include <fftw3.h>
-
 #include <pthread.h>
-
 #include <alsa/asoundlib.h>
 
 #define BUFFER_SIZE 2048
@@ -136,23 +137,31 @@ int main(int argc, char **argv)
 	pthread_t thread;
 	pthread_create(&thread, NULL, input, (void*)&audio);
 
-	double in[2 * (BUFFER_SIZE / 2 + 1)];
-	fftw_complex out[BUFFER_SIZE / 2 + 1][2];
-	fftw_plan plan;
-
-	plan = fftw_plan_dft_r2c_1d(BUFFER_SIZE, in, *out, FFTW_MEASURE);
+	double in[BUFFER_SIZE];
+	fftw_complex out[BUFFER_SIZE];
+	fftw_plan plan = fftw_plan_dft_r2c_1d(BUFFER_SIZE, in, out, FFTW_MEASURE);
 
 	while(1){
 		int i;
-		for (i = 0; i < (2 * (BUFFER_SIZE / 2 + 1)); i++) {
-			if (i < BUFFER_SIZE) {
-				in[i] = audio.out[i];
-			} else {
-				in[i] = 0;
-			}
+		for (i = 0; i < BUFFER_SIZE; i++) {
+			in[i] = audio.out[i];
 		}
 		fftw_execute(plan);
+
+		double peak = 0;
+		for(i = 0; i < BUFFER_SIZE >> 1; i++){
+			double real = sqrt(out[i][0] * out[i][0] + out[i][1] * out[i][1]);
+			if(real > peak){
+				peak = real;
+			}
+		}
+
+		if(peak > 0){
+			printf("Peak: %f\n", peak);
+		}
 	}
+
+	fftw_destroy_plan(plan);
 
 	return 0;
 }
