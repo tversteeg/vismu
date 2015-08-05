@@ -20,6 +20,25 @@ typedef struct {
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 
+void alsaListDevices()
+{
+	int card = -1;
+	if(snd_card_next(&card) < 0 || card < 0){
+		fprintf(stderr, "Error: no soundcard found\n");
+		exit(1);
+	}
+	while(card >= 0){
+		char name[32];
+		sprintf(name, "hw:%d", card);
+		printf("Card: %s\n", name);
+
+		if(snd_card_next(&card) < 0){
+			fprintf(stderr, "Error: no soundcard found\n");
+			exit(1);
+		}
+	}
+}
+
 void* input(void *data)
 {
 	audiodata_t *audio = (audiodata_t*)data;
@@ -141,6 +160,8 @@ int main(int argc, char **argv)
 		printf("No valid ALSA source is supplied\n");
 		return 1;
 	}
+
+	alsaListDevices();
 
 	pthread_mutex_init(&mutex, NULL);
 	pthread_cond_init(&cond, NULL);
