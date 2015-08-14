@@ -10,6 +10,7 @@
 #include <alsa/asoundlib.h>
 
 #define BUFFER_SIZE 2048
+#define LISTEN_BUFFER_SIZE 128
 
 #define DEBUG
 
@@ -22,15 +23,15 @@ typedef struct {
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 
-double rootMeanSquare(char *buffer)
+double rootMeanSquare(short *buffer)
 {
 	long int sum = 0.0;
 	int i;
-	for(i = 0; i < BUFFER_SIZE; i++){
+	for(i = 0; i < LISTEN_BUFFER_SIZE; i++){
 		sum += buffer[i] * buffer[i];
 	}
 
-	return sqrt(sum / BUFFER_SIZE);
+	return sqrt(sum / LISTEN_BUFFER_SIZE);
 }
 
 int alsaListenDevice(int card, int dev)
@@ -46,24 +47,33 @@ int alsaListenDevice(int card, int dev)
 		return -1;
 	}
 
-	if(snd_pcm_set_params(handle, SND_PCM_FORMAT_U8, SND_PCM_ACCESS_RW_INTERLEAVED, 2, 48000, 1, 50000) < 0){
+	if(snd_pcm_set_params(handle, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 2, 44100, 1, 50000) < 0){
 #ifdef DEBUG
 		fprintf(stderr, "Failed setting parameters for: %s\n", name);
 #endif
+		snd_pcm_close(handle);
 		return -1;
 	}
 
-	char buffer[BUFFER_SIZE];
+	snd_pcm_prepare(handle);
 
-	int i = 0;
+	short buffer[LISTEN_BUFFER_SIZE];
 	double peak = 0.0;
+	int i = 0;
 	while(i++ < 10){
-		snd_pcm_sframes_t frames = snd_pcm_readi(handle, buffer, BUFFER_SIZE);
-		if(frames < 0){
-			frames = snd_pcm_recover(handle, frames, 0);
-		}
-		if(frames < 0){
+		int frames = snd_pcm_readi(handle, buffer, LISTEN_BUFFER_SIZE / 4); // Buffer size / channels / 2
+		if(frames == -EPIPE){
+#ifdef DEBUG
+			fprintf(stderr, "Buffer overrun\n");
+#endif
+			snd_pcm_prepare(handle);
 			continue;
+		}else if(frames < 0){
+#ifdef DEBUG
+			fprintf(stderr, "Read error: %s\n", snd_strerror(frames));
+#endif
+		}else if(frames != LISTEN_BUFFER_SIZE / 4){
+			fprintf(stderr, "%d-%d\n", frames, LISTEN_BUFFER_SIZE / 4);
 		}
 
 		double val = rootMeanSquare(buffer);
@@ -72,6 +82,7 @@ int alsaListenDevice(int card, int dev)
 		}
 	}
 
+	snd_pcm_drain(handle);
 	snd_pcm_close(handle);
 
 	return 20 * log10(peak);
