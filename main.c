@@ -11,6 +11,8 @@
 
 #define BUFFER_SIZE 2048
 
+#define DEBUG
+
 typedef struct {
 	int format, out[BUFFER_SIZE];
 	unsigned int rate;
@@ -20,13 +22,62 @@ typedef struct {
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 
-int alsaListenDevice(int card, int dev)
+double rootMeanSquare(char *buffer)
 {
+	long int sum = 0.0;
+	int i;
+	for(i = 0; i < BUFFER_SIZE; i++){
+		sum += buffer[i] * buffer[i];
+	}
 
-	return -1;
+	return sqrt(sum / BUFFER_SIZE);
 }
 
-void alsaListDevices()
+int alsaListenDevice(int card, int dev)
+{
+	char name[32];
+	sprintf(name, "hw:%d,%d", card, dev);
+
+	snd_pcm_t *handle;
+	if(snd_pcm_open(&handle, name, SND_PCM_STREAM_CAPTURE, 0) < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Failed opening: %s\n", name);
+#endif
+		return -1;
+	}
+
+	if(snd_pcm_set_params(handle, SND_PCM_FORMAT_U8, SND_PCM_ACCESS_RW_INTERLEAVED, 2, 48000, 1, 50000) < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Failed setting parameters for: %s\n", name);
+#endif
+		return -1;
+	}
+
+	char buffer[BUFFER_SIZE];
+
+	int i = 0;
+	double peak = 0.0;
+	while(i++ < 10){
+		snd_pcm_sframes_t frames = snd_pcm_readi(handle, buffer, BUFFER_SIZE);
+		if(frames < 0){
+			frames = snd_pcm_recover(handle, frames, 0);
+		}
+		if(frames < 0){
+			continue;
+		}
+
+		double val = rootMeanSquare(buffer);
+		if(peak < val){
+			peak = val;
+		}
+	}
+
+	snd_pcm_close(handle);
+
+	return 20 * log10(peak);
+}
+
+void alsaSetDefaultInput()
 {
 	snd_ctl_card_info_t *info;
 	snd_ctl_card_info_alloca(&info);
@@ -65,7 +116,7 @@ void alsaListDevices()
 #ifdef DEBUG
 			printf("%i: %s [%s], device %i: %s [%s]\n", card, snd_ctl_card_info_get_id(info), snd_ctl_card_info_get_name(info), dev, snd_pcm_info_get_id(pcminfo), snd_pcm_info_get_name(pcminfo));
 #endif
-			printf("Listening to: %s,%i\n", name, dev);
+			printf("%d\n", alsaListenDevice(card, dev));
 		}
 
 		snd_ctl_close(handle);
@@ -197,7 +248,7 @@ int main(int argc, char **argv)
 #ifdef DEBUG
 		printf("No valid ALSA source is supplied, using default input\n");
 #endif
-		alsaListDevices();
+		alsaSetDefaultInput();
 		return 1;
 	}
 
