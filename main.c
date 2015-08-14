@@ -34,34 +34,79 @@ double rootMeanSquare(short *buffer)
 	return sqrt(sum / LISTEN_BUFFER_SIZE);
 }
 
+int alsaGetCaptureHandle(char *name, snd_pcm_t **handle, snd_pcm_hw_params_t **params, int *dir, snd_pcm_uframes_t frames)
+{
+	int status = snd_pcm_open(handle, name, SND_PCM_STREAM_CAPTURE, 0);
+	if(status < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Error opening stream: %s\n", snd_strerror(status));
+#endif
+		return -1;
+	}
+
+	snd_pcm_hw_params_alloca(params);
+	snd_pcm_hw_params_any(*handle, *params);
+	if(snd_pcm_hw_params_set_access(*handle, *params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Error setting access\n");
+#endif
+		return -1;
+	}
+	if(snd_pcm_hw_params_set_format(*handle, *params, SND_PCM_FORMAT_S16_LE) < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Error setting format\n");
+#endif
+		return -1;
+	}
+	if(snd_pcm_hw_params_set_channels(*handle, *params, 2) < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Error setting channels\n");
+#endif
+		return -1;
+	}
+	unsigned int rate = 44100;
+	if(snd_pcm_hw_params_set_rate_near(*handle, *params, &rate, dir) < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Error setting rate\n");
+#endif
+		return -1;
+	}
+	snd_pcm_uframes_t framesset = frames;
+	snd_pcm_hw_params_set_period_size_near(*handle, *params, &framesset, dir);
+
+	status = snd_pcm_hw_params(*handle, *params);
+	if(status < 0){
+		snd_pcm_close(*handle);
+#ifdef DEBUG
+		fprintf(stderr, "Unable to set hardware parameters: %s\n", snd_strerror(status));
+#endif
+		return -1;
+	}
+
+	return 0;
+}
+
 int alsaListenDevice(int card, int dev)
 {
 	char name[32];
 	sprintf(name, "hw:%d,%d", card, dev);
 
+	int dir;
 	snd_pcm_t *handle;
-	if(snd_pcm_open(&handle, name, SND_PCM_STREAM_CAPTURE, 0) < 0){
-#ifdef DEBUG
-		fprintf(stderr, "Failed opening: %s\n", name);
-#endif
+	snd_pcm_hw_params_t *params;
+	if(alsaGetCaptureHandle(name, &handle, &params, &dir, 50000) < 0){
 		return -1;
 	}
-
-	if(snd_pcm_set_params(handle, SND_PCM_FORMAT_S16_LE, SND_PCM_ACCESS_RW_INTERLEAVED, 2, 44100, 1, 50000) < 0){
-#ifdef DEBUG
-		fprintf(stderr, "Failed setting parameters for: %s\n", name);
-#endif
-		snd_pcm_close(handle);
-		return -1;
-	}
-
-	snd_pcm_prepare(handle);
-
+	
 	short buffer[LISTEN_BUFFER_SIZE];
 	double peak = 0.0;
 	int i = 0;
 	while(i++ < 10){
-		int frames = snd_pcm_readi(handle, buffer, LISTEN_BUFFER_SIZE / 4); // Buffer size / channels / 2
+		int frames;
+		while((frames = snd_pcm_readi(handle, buffer, LISTEN_BUFFER_SIZE / 4))< 0){ // Buffer size / channels / 2
+			snd_pcm_prepare(handle);
+		}
+
 		if(frames == -EPIPE){
 #ifdef DEBUG
 			fprintf(stderr, "Buffer overrun\n");
@@ -72,8 +117,6 @@ int alsaListenDevice(int card, int dev)
 #ifdef DEBUG
 			fprintf(stderr, "Read error: %s\n", snd_strerror(frames));
 #endif
-		}else if(frames != LISTEN_BUFFER_SIZE / 4){
-			fprintf(stderr, "%d-%d\n", frames, LISTEN_BUFFER_SIZE / 4);
 		}
 
 		double val = rootMeanSquare(buffer);
@@ -142,31 +185,11 @@ void* input(void *data)
 {
 	audiodata_t *audio = (audiodata_t*)data;
 
-	snd_pcm_t *handle;
-	int status = snd_pcm_open(&handle, audio->source, SND_PCM_STREAM_CAPTURE, 0);
-	if(status < 0){
-		fprintf(stderr, "Error opening stream: %s\n", snd_strerror(status));
-		exit(EXIT_FAILURE);
-	}
-
-	snd_pcm_hw_params_t *params;
-	snd_pcm_hw_params_alloca(&params);
-	snd_pcm_hw_params_any(handle, params);
-	snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED);
-	snd_pcm_hw_params_set_format(handle, params, SND_PCM_FORMAT_S16_LE);
-	snd_pcm_hw_params_set_channels(handle, params, 2);
 	int dir;
-	unsigned int rate = 44100;
-	snd_pcm_hw_params_set_rate_near(handle, params, &rate, &dir);
-	snd_pcm_uframes_t frames = 256;
-	snd_pcm_hw_params_set_period_size_near(handle, params, &frames, &dir);
-
-	status = snd_pcm_hw_params(handle, params);
-	if(status < 0){
-		fprintf(stderr, "Unable to set hardware parameters: %s\n", snd_strerror(status));
-		exit(EXIT_FAILURE);
-	}
-
+	snd_pcm_t *handle;
+	snd_pcm_hw_params_t *params;
+	alsaGetCaptureHandle(audio->source, &handle, &params, &dir, 256);
+	
 	snd_pcm_format_t format;
 	snd_pcm_hw_params_get_format(params, &format);
 
@@ -179,6 +202,7 @@ void* input(void *data)
 	}
 
 	snd_pcm_hw_params_get_rate(params, &audio->rate, &dir);
+	snd_pcm_uframes_t frames = 256;
 	snd_pcm_hw_params_get_period_size(params, &frames, &dir);
 	unsigned int time;
 	snd_pcm_hw_params_get_period_time(params, &time, &dir);
@@ -192,7 +216,7 @@ void* input(void *data)
 
 	int framecount = 0;
 	while(1){
-		status = snd_pcm_readi(handle, buf, frames);
+		int status = snd_pcm_readi(handle, buf, frames);
 		if(status == -EPIPE){
 			snd_pcm_prepare(handle);
 		}
