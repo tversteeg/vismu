@@ -131,7 +131,7 @@ int alsaListenDevice(int card, int dev)
 	return 20 * log10(peak);
 }
 
-void alsaSetDefaultInput()
+void alsaSetDefaultInput(audiodata_t *audio)
 {
 	snd_ctl_card_info_t *info;
 	snd_ctl_card_info_alloca(&info);
@@ -170,7 +170,11 @@ void alsaSetDefaultInput()
 #ifdef DEBUG
 			printf("%i: %s [%s], device %i: %s [%s]\n", card, snd_ctl_card_info_get_id(info), snd_ctl_card_info_get_name(info), dev, snd_pcm_info_get_id(pcminfo), snd_pcm_info_get_name(pcminfo));
 #endif
-			printf("%d\n", alsaListenDevice(card, dev));
+			if(alsaListenDevice(card, dev) <= 0){
+				continue;
+			}
+
+			sprintf(audio->source, "hw:%d,%d", card, dev);
 		}
 
 		snd_ctl_close(handle);
@@ -281,10 +285,9 @@ int main(int argc, char **argv)
 
 	if(audio.source == NULL){
 #ifdef DEBUG
-		printf("No valid ALSA source is supplied, using default input\n");
+		printf("No valid ALSA source is supplied, finding default active input\n");
 #endif
-		alsaSetDefaultInput();
-		return 1;
+		alsaSetDefaultInput(&audio);
 	}
 
 	pthread_mutex_init(&mutex, NULL);
