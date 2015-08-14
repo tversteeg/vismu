@@ -20,20 +20,57 @@ typedef struct {
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 
+int alsaListenDevice(int card, int dev)
+{
+
+	return -1;
+}
+
 void alsaListDevices()
 {
+	snd_ctl_card_info_t *info;
+	snd_ctl_card_info_alloca(&info);
+	snd_pcm_info_t *pcminfo;
+	snd_pcm_info_alloca(&pcminfo);
+
 	int card = -1;
 	if(snd_card_next(&card) < 0 || card < 0){
 		fprintf(stderr, "Error: no soundcard found\n");
 		exit(1);
 	}
+#ifdef DEBUG
+	printf("List of %s hardware devices:\n", snd_pcm_stream_name(SND_PCM_STREAM_PLAYBACK));
+#endif
 	while(card >= 0){
 		char name[32];
 		sprintf(name, "hw:%d", card);
-		printf("Card: %s\n", name);
+		
+		snd_ctl_t *handle;
+		snd_ctl_open(&handle, name, 0);
+		snd_ctl_card_info(handle, info);
+
+		int dev = -1;
+		while(1){
+			snd_ctl_pcm_next_device(handle, &dev);
+			if(dev < 0){
+				break;
+			}
+
+			snd_pcm_info_set_device(pcminfo, dev);
+			snd_pcm_info_set_subdevice(pcminfo, 0);
+			snd_pcm_info_set_stream(pcminfo, SND_PCM_STREAM_PLAYBACK);
+			if(snd_ctl_pcm_info(handle, pcminfo) < 0){
+				continue;
+			}
+#ifdef DEBUG
+			printf("%i: %s [%s], device %i: %s [%s]\n", card, snd_ctl_card_info_get_id(info), snd_ctl_card_info_get_name(info), dev, snd_pcm_info_get_id(pcminfo), snd_pcm_info_get_name(pcminfo));
+#endif
+			printf("Listening to: %s,%i\n", name, dev);
+		}
+
+		snd_ctl_close(handle);
 
 		if(snd_card_next(&card) < 0){
-			fprintf(stderr, "Error: no soundcard found\n");
 			exit(1);
 		}
 	}
@@ -157,11 +194,12 @@ int main(int argc, char **argv)
 	}
 
 	if(audio.source == NULL){
-		printf("No valid ALSA source is supplied\n");
+#ifdef DEBUG
+		printf("No valid ALSA source is supplied, using default input\n");
+#endif
+		alsaListDevices();
 		return 1;
 	}
-
-	alsaListDevices();
 
 	pthread_mutex_init(&mutex, NULL);
 	pthread_cond_init(&cond, NULL);
