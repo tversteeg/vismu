@@ -306,8 +306,8 @@ void alsaSetDefaultInput(audiodata_t *audio, int best)
 	}
 
 done:
-	if(highnum < 0){
-		fprintf(stderr, "Could not find default input device!");
+	if(highnum < 0 || highcard < 0 || highdev < 0){
+		fprintf(stderr, "Could not find default input device!\n");
 		exit(1);
 	}
 
@@ -458,6 +458,12 @@ int main(int argc, char **argv)
 	//	ccGLContextBind();
 
 	glewInit();
+
+	GLuint program = loadProgram();
+	glUseProgram(program);
+
+	GLuint vao, vbo;
+	loadScreenTriangles(&vao, &vbo);
 
 	bool loop = true;
 	while(loop){
