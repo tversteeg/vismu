@@ -459,12 +459,15 @@ int main(int argc, char **argv)
 
 	glewInit();
 
+#ifdef VISMU_DEBUG
 	printf("OpenGL version: %s\n", glGetString(GL_VERSION));
 	printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
 	printf("Vendor: %s\n", glGetString(GL_VENDOR));
 	printf("Renderer: %s\n", glGetString(GL_RENDERER));
+#endif
 
 	GLuint program = loadProgram();
+	GLint peakloc = glGetUniformLocation(program, "peak");
 	glUseProgram(program);
 
 	GLuint vao, vbo;
@@ -507,6 +510,8 @@ int main(int argc, char **argv)
 
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
+
+		glProgramUniform1f(program, peakloc, peak);
 
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
