@@ -1,7 +1,7 @@
 CC=gcc
 RM=rm -f
-FLAGS=-g -Wall -Wextra -DCC_USE_ALL
-LDFLAGS=-L/usr/lib -L/usr/local/lib -L. -lccore -lasound -lfftw3 -lm -lpthread -lX11 -lXrandr -lXinerama -lXi -lGL -lGLU -lGLEW
+FLAGS=-g -Wall -Wextra -DCC_USE_ALL -DVISMU_DEBUG
+LDFLAGS=-g -L/usr/lib -L/usr/local/lib -L. -lccore -lasound -lfftw3 -lm -lpthread -lX11 -lXrandr -lXinerama -lXi -lGL -lGLU -lGLEW
 
 SRCS=main.c
 OBJS=$(subst .c,.o,$(SRCS))

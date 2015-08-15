@@ -30,6 +30,7 @@ typedef struct {
 
 pthread_mutex_t mutex;
 pthread_cond_t cond;
+bool threaddone;
 
 double rootMeanSquare(const short *buf, size_t len)
 {
@@ -46,26 +47,26 @@ int alsaSetHwParams(snd_pcm_t *handle, snd_pcm_hw_params_t *params, int *dir, sn
 {
 	snd_pcm_hw_params_any(handle, params);
 	if(snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		fprintf(stderr, "Error setting access\n");
 #endif
 		return -1;
 	}
 	if(snd_pcm_hw_params_set_format(handle, params, SND_PCM_FORMAT_S16_LE) < 0){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		fprintf(stderr, "Error setting format\n");
 #endif
 		return -1;
 	}
 	if(snd_pcm_hw_params_set_channels(handle, params, 2) < 0){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		fprintf(stderr, "Error setting channels\n");
 #endif
 		return -1;
 	}
 	unsigned int rate = 44100;
 	if(snd_pcm_hw_params_set_rate_near(handle, params, &rate, dir) < 0){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		fprintf(stderr, "Error setting rate\n");
 #endif
 		return -1;
@@ -74,7 +75,7 @@ int alsaSetHwParams(snd_pcm_t *handle, snd_pcm_hw_params_t *params, int *dir, sn
 
 	int status = snd_pcm_hw_params(handle, params);
 	if(status < 0){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		fprintf(stderr, "Unable to set hardware parameters: %s\n", snd_strerror(status));
 #endif
 		return -1;
@@ -91,7 +92,7 @@ int alsaListenDevice(int card, int dev)
 	snd_pcm_t *handle;
 	int status = snd_pcm_open(&handle, name, SND_PCM_STREAM_CAPTURE, 0);
 	if(status < 0){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		fprintf(stderr, "Error opening stream: %s\n", snd_strerror(status));
 #endif
 		return -1;
@@ -114,12 +115,12 @@ int alsaListenDevice(int card, int dev)
 	size_t size = frames << 1;
 	if(size <= 0 || size < frames){
 		snd_pcm_close(handle);
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		fprintf(stderr, "Invalid buffer size: %d\n", size);
 #endif
 		return -1;
 	}
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 	printf("Buffer size: %d\n", size);
 #endif
 	
@@ -133,13 +134,13 @@ int alsaListenDevice(int card, int dev)
 		}
 
 		if(result == -EPIPE){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 			fprintf(stderr, "Buffer overrun\n");
 #endif
 			snd_pcm_prepare(handle);
 			continue;
 		}else if(result < 0){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 			fprintf(stderr, "Read error: %s\n", snd_strerror(result));
 #endif
 		}
@@ -158,7 +159,7 @@ int alsaListenDevice(int card, int dev)
 	return 20 * log10(peak);
 }
 
-void alsaSetDefaultInput(audiodata_t *audio)
+void alsaSetDefaultInput(audiodata_t *audio, int best)
 {
 	snd_ctl_card_info_t *info;
 	snd_ctl_card_info_alloca(&info);
@@ -170,7 +171,7 @@ void alsaSetDefaultInput(audiodata_t *audio)
 		fprintf(stderr, "Error: no soundcard found\n");
 		exit(1);
 	}
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 	printf("List of %s hardware devices:\n", snd_pcm_stream_name(SND_PCM_STREAM_PLAYBACK));
 #endif
 
@@ -196,7 +197,7 @@ void alsaSetDefaultInput(audiodata_t *audio)
 			if(snd_ctl_pcm_info(handle, pcminfo) < 0){
 				continue;
 			}
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 			printf("%i: %s [%s], device %i: %s [%s]\n", card, snd_ctl_card_info_get_id(info), snd_ctl_card_info_get_name(info), dev, snd_pcm_info_get_id(pcminfo), snd_pcm_info_get_name(pcminfo));
 #endif
 			int peak = alsaListenDevice(card, dev);
@@ -207,6 +208,10 @@ void alsaSetDefaultInput(audiodata_t *audio)
 			highnum = peak;
 			highcard = card;
 			highdev = dev;
+
+			if(!best){
+				goto done;
+			}
 		}
 
 		snd_ctl_close(handle);
@@ -216,18 +221,18 @@ void alsaSetDefaultInput(audiodata_t *audio)
 		}
 	}
 
+done:
 	if(highnum < 0){
 		fprintf(stderr, "Could not find default input device!");
 		exit(1);
 	}
 
-#ifdef DEBUG
-	printf("Found device with a peak of %d\n", highnum);
+#ifdef VISMU_DEBUG
+	printf("Found device \"hw:%d,%d\" with a peak of %d\n", highcard, highdev, highnum);
 #endif
 
 	audio->source = (char*)malloc(32);
 	sprintf(audio->source, "hw:%d,%d", highcard, highdev);
-
 }
 
 void* input(void *data)
@@ -237,7 +242,7 @@ void* input(void *data)
 	snd_pcm_t *handle;
 	int status = snd_pcm_open(&handle, audio->source, SND_PCM_STREAM_CAPTURE, 0);
 	if(status < 0){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		fprintf(stderr, "Error opening stream: %s\n", snd_strerror(status));
 #endif
 		exit(1);
@@ -270,7 +275,7 @@ void* input(void *data)
 	snd_pcm_hw_params_free(params);
 
 	int size = frames * (audio->format >> 3) << 1;
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 	printf("Buffer size: %d\n", size);
 #endif
 	char *buf = (char*)calloc(size, 1);
@@ -279,7 +284,7 @@ void* input(void *data)
 	int adjustl = audio->format >> 3;
 
 	int framecount = 0;
-	while(1){
+	while(!threaddone){
 		int status = snd_pcm_readi(handle, buf, frames);
 		if(status == -EPIPE){
 			snd_pcm_prepare(handle);
@@ -313,7 +318,7 @@ void* input(void *data)
 
 			audio->out[framecount++] = (right + left) >> 1;
 
-			if(framecount == BUFFER_SIZE - 1){
+			if(framecount >= BUFFER_SIZE - 1){
 				framecount = 0;
 			}
 		}
@@ -334,24 +339,28 @@ int main(int argc, char **argv)
 		audio.out[i] = 0;
 	}
 
-	int c;
-	while((c = getopt(argc, argv, ":d:")) != -1){
+	int c, best = 0;
+	while((c = getopt(argc, argv, "bd:")) != -1){
 		switch(c){
 			case 'd':
 				audio.source = optarg;
+				break;
+			case 'b':
+				best = 1;
 				break;
 		}
 	}
 
 	if(audio.source == NULL){
-#ifdef DEBUG
+#ifdef VISMU_DEBUG
 		printf("No valid ALSA source is supplied, finding default active input\n");
 #endif
-		alsaSetDefaultInput(&audio);
+		alsaSetDefaultInput(&audio, best);
 	}
 
 	pthread_mutex_init(&mutex, NULL);
 	pthread_cond_init(&cond, NULL);
+	threaddone = false;
 
 	pthread_t thread;
 	pthread_create(&thread, NULL, input, (void*)&audio);
@@ -362,11 +371,11 @@ int main(int argc, char **argv)
 
 	ccDisplayInitialize();
 	ccWindowCreate((ccRect){.x = 0, .y = 0, .width = 800, .height = 600}, "vismu", 0);
-	ccGLContextBind();
+//	ccGLContextBind();
 
 	glewInit();
 
-	int loop = 0;
+	bool loop = true;
 	while(loop){
 		while(ccWindowEventPoll()){
 			ccEvent event = ccWindowEventGet();
@@ -379,9 +388,9 @@ int main(int argc, char **argv)
 			}
 		}
 
-		int i;
 		pthread_mutex_lock(&mutex);
 		pthread_cond_wait(&cond, &mutex);
+		int i;
 		for (i = 0; i < BUFFER_SIZE; i++) {
 			in[i] = audio.out[i];
 		}
@@ -401,13 +410,15 @@ int main(int argc, char **argv)
 			printf("Peak: %f\n", peak);
 		}*/
 
-		ccGLBuffersSwap();
+//		ccGLBuffersSwap();
 	}
-
-	ccFree();
 
 	fftw_destroy_plan(plan);
 
+	ccFree();
+
+	threaddone = true;
+	
 	pthread_mutex_destroy(&mutex);
 	pthread_exit(NULL);
 }
