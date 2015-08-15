@@ -5,14 +5,22 @@
 
 #include <getopt.h>
 
+#include <ccore/file.h>
+#include <ccore/display.h>
+#include <ccore/window.h>
+#include <ccore/opengl.h>
+#include <ccore/event.h>
+#include <ccore/string.h>
+#include <ccore/error.h>
+
+#include <GL/glew.h>
+
 #include <fftw3.h>
 #include <pthread.h>
 #include <alsa/asoundlib.h>
 
 #define BUFFER_SIZE 2048
 #define LISTEN_BUFFER_SIZE 128
-
-#define DEBUG
 
 typedef struct {
 	int format, out[BUFFER_SIZE];
@@ -26,7 +34,7 @@ pthread_cond_t cond;
 double rootMeanSquare(const short *buf, size_t len)
 {
 	long int sum = 0;
-	int i;
+	size_t i;
 	for(i = 0; i < len; i++){
 		sum += buf[i] * buf[i];
 	}
@@ -103,7 +111,7 @@ int alsaListenDevice(int card, int dev)
 
 	snd_pcm_hw_params_free(params);
 
-	int size = frames << 1;
+	size_t size = frames << 1;
 	if(size <= 0 || size < frames){
 		snd_pcm_close(handle);
 #ifdef DEBUG
@@ -352,7 +360,25 @@ int main(int argc, char **argv)
 	fftw_complex out[BUFFER_SIZE];
 	fftw_plan plan = fftw_plan_dft_r2c_1d(BUFFER_SIZE, in, out, FFTW_MEASURE);
 
-	while(1){
+	ccDisplayInitialize();
+	ccWindowCreate((ccRect){.x = 0, .y = 0, .width = 800, .height = 600}, "vismu", 0);
+	ccGLContextBind();
+
+	glewInit();
+
+	int loop = 0;
+	while(loop){
+		while(ccWindowEventPoll()){
+			ccEvent event = ccWindowEventGet();
+			switch(event.type){
+				case CC_EVENT_WINDOW_QUIT:
+					loop = false;
+					break;
+				default:
+					break;
+			}
+		}
+
 		int i;
 		pthread_mutex_lock(&mutex);
 		pthread_cond_wait(&cond, &mutex);
@@ -374,7 +400,11 @@ int main(int argc, char **argv)
 /*		if(peak > 0){
 			printf("Peak: %f\n", peak);
 		}*/
+
+		ccGLBuffersSwap();
 	}
+
+	ccFree();
 
 	fftw_destroy_plan(plan);
 
