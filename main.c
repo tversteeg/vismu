@@ -41,10 +41,10 @@ GLuint loadShader(char *file, GLenum type)
 	ccFileInfo fi;
 
 	fi = ccFileInfoGet(file);
-	if(!fi.size){
+	if(fi.size <= 0){
 		return 0;
 	}
-	buf = malloc(fi.size);
+	buf = (char*)malloc(fi.size);
 
 	fp = fopen(file, "rb");
 	fread(buf, 1, fi.size, fp);
@@ -77,8 +77,8 @@ GLuint loadProgram()
 {
 	GLuint program, vertex, fragment;
 
-	fragment = loadShader(ccStringConcatenate(2, ccFileDataDirGet(), "fragment.glsl"), GL_FRAGMENT_SHADER);
-	vertex = loadShader(ccStringConcatenate(2, ccFileDataDirGet(), "vertex.glsl"), GL_VERTEX_SHADER);
+	fragment = loadShader("fragment.glsl", GL_FRAGMENT_SHADER);
+	vertex = loadShader("vertex.glsl", GL_VERTEX_SHADER);
 
 	program = glCreateProgram();
 	glAttachShader(program, vertex);
@@ -455,9 +455,14 @@ int main(int argc, char **argv)
 
 	ccDisplayInitialize();
 	ccWindowCreate((ccRect){.x = 0, .y = 0, .width = 800, .height = 600}, "vismu", 0);
-	//	ccGLContextBind();
+	ccGLContextBind();
 
 	glewInit();
+
+	printf("OpenGL version: %s\n", glGetString(GL_VERSION));
+	printf("GLSL version: %s\n", glGetString(GL_SHADING_LANGUAGE_VERSION));
+	printf("Vendor: %s\n", glGetString(GL_VENDOR));
+	printf("Renderer: %s\n", glGetString(GL_RENDERER));
 
 	GLuint program = loadProgram();
 	glUseProgram(program);
