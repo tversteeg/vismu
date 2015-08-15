@@ -32,6 +32,90 @@ pthread_mutex_t mutex;
 pthread_cond_t cond;
 bool threaddone;
 
+GLuint loadShader(char *file, GLenum type)
+{
+	FILE *fp;
+	char *buf;
+	GLuint shader;
+	GLint status, logLength;
+	ccFileInfo fi;
+
+	fi = ccFileInfoGet(file);
+	if(!fi.size){
+		return 0;
+	}
+	buf = malloc(fi.size);
+
+	fp = fopen(file, "rb");
+	fread(buf, 1, fi.size, fp);
+	fclose(fp);
+
+	buf[fi.size] = '\0';
+
+	shader = glCreateShader(type);
+	glShaderSource(shader, 1, (const char**)&buf, NULL);
+	glCompileShader(shader);
+
+	free(buf);
+
+	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
+	if(status == GL_FALSE){
+		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
+
+		buf = (char*)malloc(logLength + 1);
+		glGetShaderInfoLog(shader, logLength, NULL, buf);
+
+		printf("%s shader error:\n\t%s", (type == GL_VERTEX_SHADER) ? "Vertex" : "Fragment", buf);
+
+		free(buf);	
+	}
+
+	return shader;
+}
+
+GLuint loadProgram()
+{
+	GLuint program, vertex, fragment;
+
+	fragment = loadShader(ccStringConcatenate(2, ccFileDataDirGet(), "fragment.glsl"), GL_FRAGMENT_SHADER);
+	vertex = loadShader(ccStringConcatenate(2, ccFileDataDirGet(), "vertex.glsl"), GL_VERTEX_SHADER);
+
+	program = glCreateProgram();
+	glAttachShader(program, vertex);
+	glAttachShader(program, fragment);
+
+	glBindAttribLocation(program, 0, "position");
+	glLinkProgram(program);
+
+	return program;
+}
+
+void loadScreenTriangles(GLuint *vao, GLuint *vbo)
+{
+	GLfloat vertices[] = {
+		-1,-1, 0,
+		1,-1, 0,
+		-1, 1, 0,
+		1,-1, 0,
+		-1, 1, 0,
+		1, 1, 0,
+	};
+
+	glGenVertexArrays(1, vao);
+	glBindVertexArray(*vao);
+
+	glGenBuffers(1, vbo);
+	glBindBuffer(GL_ARRAY_BUFFER, *vbo);
+
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 0, NULL);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+}
+
 double rootMeanSquare(const short *buf, size_t len)
 {
 	long int sum = 0;
@@ -123,7 +207,7 @@ int alsaListenDevice(int card, int dev)
 #ifdef VISMU_DEBUG
 	printf("Buffer size: %d\n", size);
 #endif
-	
+
 	short *buf = (short*)calloc(size, sizeof(short));
 	double peak = 0.0;
 	int i = 0;
@@ -179,7 +263,7 @@ void alsaSetDefaultInput(audiodata_t *audio, int best)
 	while(card >= 0){
 		char name[32];
 		sprintf(name, "hw:%d", card);
-		
+
 		snd_ctl_t *handle;
 		snd_ctl_open(&handle, name, 0);
 		snd_ctl_card_info(handle, info);
@@ -255,7 +339,7 @@ void* input(void *data)
 	if(alsaSetHwParams(handle, params, &dir, &frames) < 0){
 		exit(1);
 	}
-	
+
 	snd_pcm_format_t format;
 	snd_pcm_hw_params_get_format(params, &format);
 
@@ -371,7 +455,7 @@ int main(int argc, char **argv)
 
 	ccDisplayInitialize();
 	ccWindowCreate((ccRect){.x = 0, .y = 0, .width = 800, .height = 600}, "vismu", 0);
-//	ccGLContextBind();
+	//	ccGLContextBind();
 
 	glewInit();
 
@@ -406,11 +490,18 @@ int main(int argc, char **argv)
 			}
 		}
 
-/*		if(peak > 0){
-			printf("Peak: %f\n", peak);
-		}*/
+		/*		if(peak > 0){
+					printf("Peak: %f\n", peak);
+					}*/
 
-//		ccGLBuffersSwap();
+		glClearColor(0, 0, 0, 1);
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		glBindVertexArray(vao);
+		glDrawArrays(GL_TRIANGLES, 0, 6);
+		glBindVertexArray(0);
+
+		ccGLBuffersSwap();
 	}
 
 	fftw_destroy_plan(plan);
@@ -418,7 +509,7 @@ int main(int argc, char **argv)
 	ccFree();
 
 	threaddone = true;
-	
+
 	pthread_mutex_destroy(&mutex);
 	pthread_exit(NULL);
 }
