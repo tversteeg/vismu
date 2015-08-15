@@ -23,60 +23,49 @@ typedef struct {
 pthread_mutex_t mutex;
 pthread_cond_t cond;
 
-double rootMeanSquare(short *buffer)
+double rootMeanSquare(const short *buf, size_t len)
 {
-	long int sum = 0.0;
+	long int sum = 0;
 	int i;
-	for(i = 0; i < LISTEN_BUFFER_SIZE; i++){
-		sum += buffer[i] * buffer[i];
+	for(i = 0; i < len; i++){
+		sum += buf[i] * buf[i];
 	}
 
-	return sqrt(sum / LISTEN_BUFFER_SIZE);
+	return sqrt(sum / len);
 }
 
-int alsaGetCaptureHandle(char *name, snd_pcm_t **handle, snd_pcm_hw_params_t **params, int *dir, snd_pcm_uframes_t frames)
+int alsaSetHwParams(snd_pcm_t *handle, snd_pcm_hw_params_t *params, int *dir, snd_pcm_uframes_t *frames)
 {
-	int status = snd_pcm_open(handle, name, SND_PCM_STREAM_CAPTURE, 0);
-	if(status < 0){
-#ifdef DEBUG
-		fprintf(stderr, "Error opening stream: %s\n", snd_strerror(status));
-#endif
-		return -1;
-	}
-
-	snd_pcm_hw_params_alloca(params);
-	snd_pcm_hw_params_any(*handle, *params);
-	if(snd_pcm_hw_params_set_access(*handle, *params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0){
+	snd_pcm_hw_params_any(handle, params);
+	if(snd_pcm_hw_params_set_access(handle, params, SND_PCM_ACCESS_RW_INTERLEAVED) < 0){
 #ifdef DEBUG
 		fprintf(stderr, "Error setting access\n");
 #endif
 		return -1;
 	}
-	if(snd_pcm_hw_params_set_format(*handle, *params, SND_PCM_FORMAT_S16_LE) < 0){
+	if(snd_pcm_hw_params_set_format(handle, params, SND_PCM_FORMAT_S16_LE) < 0){
 #ifdef DEBUG
 		fprintf(stderr, "Error setting format\n");
 #endif
 		return -1;
 	}
-	if(snd_pcm_hw_params_set_channels(*handle, *params, 2) < 0){
+	if(snd_pcm_hw_params_set_channels(handle, params, 2) < 0){
 #ifdef DEBUG
 		fprintf(stderr, "Error setting channels\n");
 #endif
 		return -1;
 	}
 	unsigned int rate = 44100;
-	if(snd_pcm_hw_params_set_rate_near(*handle, *params, &rate, dir) < 0){
+	if(snd_pcm_hw_params_set_rate_near(handle, params, &rate, dir) < 0){
 #ifdef DEBUG
 		fprintf(stderr, "Error setting rate\n");
 #endif
 		return -1;
 	}
-	snd_pcm_uframes_t framesset = frames;
-	snd_pcm_hw_params_set_period_size_near(*handle, *params, &framesset, dir);
+	snd_pcm_hw_params_set_period_size_near(handle, params, frames, dir);
 
-	status = snd_pcm_hw_params(*handle, *params);
+	int status = snd_pcm_hw_params(handle, params);
 	if(status < 0){
-		snd_pcm_close(*handle);
 #ifdef DEBUG
 		fprintf(stderr, "Unable to set hardware parameters: %s\n", snd_strerror(status));
 #endif
@@ -91,35 +80,63 @@ int alsaListenDevice(int card, int dev)
 	char name[32];
 	sprintf(name, "hw:%d,%d", card, dev);
 
-	int dir;
 	snd_pcm_t *handle;
-	snd_pcm_hw_params_t *params;
-	if(alsaGetCaptureHandle(name, &handle, &params, &dir, 50000) < 0){
+	int status = snd_pcm_open(&handle, name, SND_PCM_STREAM_CAPTURE, 0);
+	if(status < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Error opening stream: %s\n", snd_strerror(status));
+#endif
 		return -1;
 	}
+
+	snd_pcm_hw_params_t *params;
+	snd_pcm_hw_params_malloc(&params);
+
+	int dir = 0;
+	snd_pcm_uframes_t frames = 50000;
+	if(alsaSetHwParams(handle, params, &dir, &frames) < 0){
+		snd_pcm_close(handle);
+		return -1;
+	}
+
+	snd_pcm_hw_params_get_period_size(params, &frames, &dir);
+
+	snd_pcm_hw_params_free(params);
+
+	int size = frames << 1;
+	if(size <= 0 || size < frames){
+		snd_pcm_close(handle);
+#ifdef DEBUG
+		fprintf(stderr, "Invalid buffer size: %d\n", size);
+#endif
+		return -1;
+	}
+#ifdef DEBUG
+	printf("Buffer size: %d\n", size);
+#endif
 	
-	short buffer[LISTEN_BUFFER_SIZE];
+	short *buf = (short*)calloc(size, sizeof(short));
 	double peak = 0.0;
 	int i = 0;
 	while(i++ < 10){
-		int frames;
-		while((frames = snd_pcm_readi(handle, buffer, LISTEN_BUFFER_SIZE / 4))< 0){ // Buffer size / channels / 2
+		int result;
+		while((result = snd_pcm_readi(handle, buf, frames))< 0){ // Buffer size / channels / 2
 			snd_pcm_prepare(handle);
 		}
 
-		if(frames == -EPIPE){
+		if(result == -EPIPE){
 #ifdef DEBUG
 			fprintf(stderr, "Buffer overrun\n");
 #endif
 			snd_pcm_prepare(handle);
 			continue;
-		}else if(frames < 0){
+		}else if(result < 0){
 #ifdef DEBUG
-			fprintf(stderr, "Read error: %s\n", snd_strerror(frames));
+			fprintf(stderr, "Read error: %s\n", snd_strerror(result));
 #endif
 		}
 
-		double val = rootMeanSquare(buffer);
+		double val = rootMeanSquare(buf, size);
 		if(peak < val){
 			peak = val;
 		}
@@ -127,6 +144,8 @@ int alsaListenDevice(int card, int dev)
 
 	snd_pcm_drain(handle);
 	snd_pcm_close(handle);
+
+	free(buf);
 
 	return 20 * log10(peak);
 }
@@ -146,6 +165,8 @@ void alsaSetDefaultInput(audiodata_t *audio)
 #ifdef DEBUG
 	printf("List of %s hardware devices:\n", snd_pcm_stream_name(SND_PCM_STREAM_PLAYBACK));
 #endif
+
+	int highnum = 0, highcard = -1, highdev = -1;
 	while(card >= 0){
 		char name[32];
 		sprintf(name, "hw:%d", card);
@@ -170,11 +191,14 @@ void alsaSetDefaultInput(audiodata_t *audio)
 #ifdef DEBUG
 			printf("%i: %s [%s], device %i: %s [%s]\n", card, snd_ctl_card_info_get_id(info), snd_ctl_card_info_get_name(info), dev, snd_pcm_info_get_id(pcminfo), snd_pcm_info_get_name(pcminfo));
 #endif
-			if(alsaListenDevice(card, dev) <= 0){
+			int peak = alsaListenDevice(card, dev);
+			if(peak <= 0 || peak < highnum){
 				continue;
 			}
 
-			sprintf(audio->source, "hw:%d,%d", card, dev);
+			highnum = peak;
+			highcard = card;
+			highdev = dev;
 		}
 
 		snd_ctl_close(handle);
@@ -183,16 +207,41 @@ void alsaSetDefaultInput(audiodata_t *audio)
 			exit(1);
 		}
 	}
+
+	if(highnum < 0){
+		fprintf(stderr, "Could not find default input device!");
+		exit(1);
+	}
+
+#ifdef DEBUG
+	printf("Found device with a peak of %d\n", highnum);
+#endif
+
+	audio->source = (char*)malloc(32);
+	sprintf(audio->source, "hw:%d,%d", highcard, highdev);
+
 }
 
 void* input(void *data)
 {
 	audiodata_t *audio = (audiodata_t*)data;
 
-	int dir;
 	snd_pcm_t *handle;
+	int status = snd_pcm_open(&handle, audio->source, SND_PCM_STREAM_CAPTURE, 0);
+	if(status < 0){
+#ifdef DEBUG
+		fprintf(stderr, "Error opening stream: %s\n", snd_strerror(status));
+#endif
+		exit(1);
+	}
+
+	int dir = 0;
+	snd_pcm_uframes_t frames = 256;
 	snd_pcm_hw_params_t *params;
-	alsaGetCaptureHandle(audio->source, &handle, &params, &dir, 256);
+	snd_pcm_hw_params_malloc(&params);
+	if(alsaSetHwParams(handle, params, &dir, &frames) < 0){
+		exit(1);
+	}
 	
 	snd_pcm_format_t format;
 	snd_pcm_hw_params_get_format(params, &format);
@@ -206,14 +255,17 @@ void* input(void *data)
 	}
 
 	snd_pcm_hw_params_get_rate(params, &audio->rate, &dir);
-	snd_pcm_uframes_t frames = 256;
 	snd_pcm_hw_params_get_period_size(params, &frames, &dir);
 	unsigned int time;
 	snd_pcm_hw_params_get_period_time(params, &time, &dir);
 
+	snd_pcm_hw_params_free(params);
+
 	int size = frames * (audio->format >> 3) << 1;
+#ifdef DEBUG
 	printf("Buffer size: %d\n", size);
-	char *buf = (char*)malloc(size);
+#endif
+	char *buf = (char*)calloc(size, 1);
 
 	int adjustr = audio->format >> 2;
 	int adjustl = audio->format >> 3;
@@ -319,9 +371,9 @@ int main(int argc, char **argv)
 			}
 		}
 
-		if(peak > 0){
+/*		if(peak > 0){
 			printf("Peak: %f\n", peak);
-		}
+		}*/
 	}
 
 	fftw_destroy_plan(plan);

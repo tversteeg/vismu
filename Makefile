@@ -1,6 +1,6 @@
-CC=gcc
+CC=gcc -g
 RM=rm -f
-LDFLAGS=-g -Wall -Wextra -lasound -lfftw3 -lm -lpthread
+LDFLAGS=-Wall -Wextra -lasound -lfftw3 -lm -lpthread
 
 SRCS=main.c
 OBJS=$(subst .c,.o,$(SRCS))
