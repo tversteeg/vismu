@@ -6,8 +6,13 @@
 #include "utils.h"
 
 #define SHADERS 2
-#define SHADER_TIME 500
-#define TRANSITION_TIME 500.0
+#define SHADER_TIME 400
+#define TRANSITION_TIME 50.0
+
+typedef struct {
+	GLuint program;
+	GLint peak, transition, texture, time;
+} visprog_t;
 
 GLuint loadShader(char *source, GLenum type)
 {
@@ -99,11 +104,9 @@ void loadScreenTriangles(GLuint *vao, GLuint *vbo)
 }
 
 GLuint vao, vbo, tex;
-int time;
+int time, active;
 
-GLuint prog[SHADERS];
-GLint peakloc[SHADERS], transloc[SHADERS], texloc[SHADERS];
-int active;
+visprog_t progs[SHADERS];
 
 void initVis()
 {
@@ -126,20 +129,22 @@ void initVis()
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, tex);
 
-	prog[0] = loadProgramFile("shaders/frag1.glsl", "shaders/vert.glsl");
-	peakloc[0] = glGetUniformLocation(prog[0], "peak");
-	transloc[0] = glGetUniformLocation(prog[0], "transition");
-	texloc[0] = glGetUniformLocation(prog[0], "tex");
+	int i;
+	for(i = 0; i < SHADERS; i++){
+		char fragshadername[64];
+		snprintf(fragshadername, sizeof(fragshadername), "shaders/frag%d.glsl", i + 1);
+		progs[i].program = loadProgramFile(fragshadername, "shaders/vert.glsl");
 
-	prog[1] = loadProgramFile("shaders/frag2.glsl", "shaders/vert.glsl");
-	peakloc[1] = glGetUniformLocation(prog[1], "peak");
-	transloc[1] = glGetUniformLocation(prog[1], "transition");
-	texloc[1] = glGetUniformLocation(prog[1], "tex");
+		progs[i].peak = glGetUniformLocation(progs[i].program, "peak");
+		progs[i].transition = glGetUniformLocation(progs[i].program, "transition");
+		progs[i].time = glGetUniformLocation(progs[i].program, "time");
+		progs[i].texture = glGetUniformLocation(progs[i].program, "tex");
+	}
 
 	loadScreenTriangles(&vao, &vbo);
 	
-	active = 0;
-	glUseProgram(prog[active]);
+	active = 1;
+	glUseProgram(progs[active].program);
 
 	time = 0;
 }
@@ -161,12 +166,15 @@ void renderVis(double peak)
 		transition = 1.0 - time / TRANSITION_TIME;
 
 		int prev = active > 0 ? active - 1 : SHADERS - 1;
-
-		glUseProgram(prog[prev]);
-		glProgramUniform1f(prog[prev], transloc[prev], 0);
 		
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
+
+		glUseProgram(progs[prev].program);
+		glProgramUniform1i(progs[prev].program, progs[prev].peak, peak);
+		glProgramUniform1f(progs[prev].program, progs[prev].transition, 0);
+		glProgramUniform1f(progs[prev].program, progs[prev].time, time);
+		glProgramUniform1i(progs[prev].program, progs[prev].texture, 0);
 
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, 6);
@@ -174,15 +182,16 @@ void renderVis(double peak)
 
 		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 800, 600, 0);
 
-		glUseProgram(prog[active]);
-		glProgramUniform1i(prog[active], texloc[active], 0);
+		glUseProgram(progs[active].program);
+		glProgramUniform1i(progs[active].program, progs[active].texture, 0);
 	}
 
 	glClearColor(0, 0, 0, 1);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glProgramUniform1f(prog[active], peakloc[active], peak);
-	glProgramUniform1f(prog[active], transloc[active], transition);
+	glProgramUniform1i(progs[active].program, progs[active].peak, peak);
+	glProgramUniform1i(progs[active].program, progs[active].transition, transition);
+	glProgramUniform1i(progs[active].program, progs[active].time, time);
 
 	glBindVertexArray(vao);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
