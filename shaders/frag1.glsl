@@ -1,5 +1,7 @@
-#version 300 es
-precision mediump float;
+#version 450
+#ifdef GL_ES
+precision highp float;
+#endif
 
 #define screenX 1.0/800
 #define screenY 1.0/600
@@ -18,8 +20,6 @@ void main()
 	vec4 prev = texture(tex, texCoord) * transition;
 
 	vec4 cur = vec4(texCoord.x, texCoord.y, peak / 100000.0, 1.0);
-
-	cur.r += sin(time) / 5.0;
 
 	cur *= 1.0 - transition;
 	

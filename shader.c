@@ -7,7 +7,7 @@
 
 #define SHADERS 2
 #define SHADER_TIME 400
-#define TRANSITION_TIME 50.0
+#define TRANSITION_TIME 100.0
 
 typedef struct {
 	GLuint program;
@@ -167,11 +167,12 @@ void renderVis(double peak)
 
 		int prev = active > 0 ? active - 1 : SHADERS - 1;
 		
+		glUseProgram(progs[prev].program);
+
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
 
-		glUseProgram(progs[prev].program);
-		glProgramUniform1i(progs[prev].program, progs[prev].peak, peak);
+		glProgramUniform1f(progs[prev].program, progs[prev].peak, peak);
 		glProgramUniform1f(progs[prev].program, progs[prev].transition, 0);
 		glProgramUniform1f(progs[prev].program, progs[prev].time, time);
 		glProgramUniform1i(progs[prev].program, progs[prev].texture, 0);
@@ -189,9 +190,9 @@ void renderVis(double peak)
 	glClearColor(0, 0, 0, 1);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glProgramUniform1i(progs[active].program, progs[active].peak, peak);
-	glProgramUniform1i(progs[active].program, progs[active].transition, transition);
-	glProgramUniform1i(progs[active].program, progs[active].time, time);
+	glProgramUniform1f(progs[active].program, progs[active].peak, peak);
+	glProgramUniform1f(progs[active].program, progs[active].transition, transition);
+	glProgramUniform1f(progs[active].program, progs[active].time, time);
 
 	glBindVertexArray(vao);
 	glDrawArrays(GL_TRIANGLES, 0, 6);

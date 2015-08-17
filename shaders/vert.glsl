@@ -1,5 +1,7 @@
-#version 300 es
-precision mediump float;
+#version 450
+#ifdef GL_ES
+precision highp float;
+#endif
 
 in vec3 position;
 
