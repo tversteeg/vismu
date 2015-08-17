@@ -46,6 +46,28 @@ GLuint loadProgram(char *fragmentsrc, char *vertexsrc)
 	return program;
 }
 
+GLuint loadProgramFile(const char *fragment, const char *vertex)
+{
+	GLuint program;
+
+	char *fragsrc, *vertsrc;
+	if(loadTextFile(fragment, &fragsrc) < 0){
+		fprintf(stderr, "Could not load shader file: %s\n", fragment);
+		exit(1);
+	}
+	if(loadTextFile(vertex, &vertsrc) < 0){
+		fprintf(stderr, "Could not load shader file: %s\n", vertex);
+		exit(1);
+	}
+
+	program = loadProgram(fragsrc, vertsrc);
+
+	free(fragsrc);
+	free(vertsrc);
+
+	return program;
+}
+
 void loadScreenTriangles(GLuint *vao, GLuint *vbo)
 {
 	GLfloat vertices[] = {
@@ -72,8 +94,11 @@ void loadScreenTriangles(GLuint *vao, GLuint *vbo)
 	glBindVertexArray(0);
 }
 
-GLint peakloc;
-GLuint program, vao, vbo;
+GLuint vao, vbo;
+int time;
+
+GLuint proga, prog1, prog2;
+GLint peakloca, peakloc1, peakloc2;
 
 void initVis()
 {
@@ -85,16 +110,19 @@ void initVis()
 	printf("Vendor: %s\n", glGetString(GL_VENDOR));
 	printf("Renderer: %s\n", glGetString(GL_RENDERER));
 #endif
+	prog1 = loadProgramFile("shaders/frag1.glsl", "shaders/vert.glsl");
+	peakloc1 = glGetUniformLocation(prog1, "peak");
 
-	char *fragsrc;
-	loadTextFile("fragment.glsl", &fragsrc);
-	char *vertsrc;
-	loadTextFile("vertex.glsl", &vertsrc);
-	program = loadProgram(fragsrc, vertsrc);
-	peakloc = glGetUniformLocation(program, "peak");
-	glUseProgram(program);
+	prog2 = loadProgramFile("shaders/frag2.glsl", "shaders/vert.glsl");
+	peakloc2 = glGetUniformLocation(prog2, "peak");
 
 	loadScreenTriangles(&vao, &vbo);
+	
+	glUseProgram(prog1);
+	proga = prog1;
+	peakloca = peakloc1;
+
+	time = 0;
 }
 
 void renderVis(double peak)
@@ -102,9 +130,24 @@ void renderVis(double peak)
 	glClearColor(0, 0, 0, 1);
 	glClear(GL_COLOR_BUFFER_BIT);
 
-	glProgramUniform1f(program, peakloc, peak);
+	glProgramUniform1f(proga, peakloca, peak);
 
 	glBindVertexArray(vao);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 	glBindVertexArray(0);
+
+	time++;
+
+	if(time > 100){
+		if(proga == prog1){
+			proga = prog2;
+			peakloca = peakloc2;
+		}else{
+			proga = prog1;
+			peakloca = peakloc1;
+		}
+		glUseProgram(proga);
+
+		time = 0;
+	}
 }
