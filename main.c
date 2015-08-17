@@ -322,7 +322,7 @@ done:
 	sprintf(audio->source, "hw:%d,%d", highcard, highdev);
 }
 
-void* input(void *data)
+void* alsaParseInput(void *data)
 {
 	audiodata_t *audio = (audiodata_t*)data;
 
@@ -450,7 +450,7 @@ int main(int argc, char **argv)
 	threaddone = false;
 
 	pthread_t thread;
-	pthread_create(&thread, NULL, input, (void*)&audio);
+	pthread_create(&thread, NULL, alsaParseInput, (void*)&audio);
 
 	double in[BUFFER_SIZE];
 	fftw_complex out[BUFFER_SIZE];

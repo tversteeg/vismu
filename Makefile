@@ -1,9 +1,9 @@
 CC=gcc
 RM=rm -f
-FLAGS=-g -Wall -Wextra -DCC_USE_ALL -DVISMU_DEBUG
+CFLAGS=-g -Wall -Wextra -DCC_USE_ALL -DVISMU_DEBUG
 LDFLAGS=-g -L/usr/lib -L/usr/local/lib -L. -lccore -lasound -lfftw3 -lm -lpthread -lX11 -lXrandr -lXinerama -lXi -lGL -lGLU -lGLEW
 
-SRCS=main.c
+SRCS=main.c shader.c
 OBJS=$(subst .c,.o,$(SRCS))
 
 all: vismu
@@ -11,8 +11,8 @@ all: vismu
 vismu: $(OBJS)
 	$(CC) -o vismu $(OBJS) $(LDFLAGS) 
 
-$(OBJS): $(SRCS)
-	$(CC) -o $(OBJS) -c $(FLAGS) $(SRCS)
+%.o: %.c
+	$(CC) -o $@ -c $(CFLAGS) $^
 
 clean:
 	$(RM) $(OBJS)
