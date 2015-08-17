@@ -32,38 +32,41 @@ pthread_mutex_t mutex;
 pthread_cond_t cond;
 bool threaddone;
 
-GLuint loadShader(char *file, GLenum type)
+int loadTextFile(const char *file, char **result)
 {
 	FILE *fp;
-	char *buf;
-	GLuint shader;
-	GLint status, logLength;
 	ccFileInfo fi;
 
 	fi = ccFileInfoGet(file);
 	if(fi.size <= 0){
-		return 0;
+		return -1;
 	}
-	buf = (char*)malloc(fi.size);
+	*result = (char*)malloc(fi.size);
 
 	fp = fopen(file, "rb");
-	fread(buf, 1, fi.size, fp);
+	fread(*result, 1, fi.size, fp);
 	fclose(fp);
 
-	buf[fi.size] = '\0';
+	(*result)[fi.size] = '\0';
+
+	return fi.size;
+}
+
+GLuint loadShader(char *source, GLenum type)
+{
+	GLuint shader;
+	GLint status, loglen;
 
 	shader = glCreateShader(type);
-	glShaderSource(shader, 1, (const char**)&buf, NULL);
+	glShaderSource(shader, 1, (const char**)&source, NULL);
 	glCompileShader(shader);
-
-	free(buf);
 
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &status);
 	if(status == GL_FALSE){
-		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
+		glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &loglen);
 
-		buf = (char*)malloc(logLength + 1);
-		glGetShaderInfoLog(shader, logLength, NULL, buf);
+		char *buf = (char*)malloc(loglen + 1);
+		glGetShaderInfoLog(shader, loglen, NULL, buf);
 
 		printf("%s shader error:\n\t%s", (type == GL_VERTEX_SHADER) ? "Vertex" : "Fragment", buf);
 
@@ -73,12 +76,12 @@ GLuint loadShader(char *file, GLenum type)
 	return shader;
 }
 
-GLuint loadProgram()
+GLuint loadProgram(char *fragmentsrc, char *vertexsrc)
 {
 	GLuint program, vertex, fragment;
 
-	fragment = loadShader("fragment.glsl", GL_FRAGMENT_SHADER);
-	vertex = loadShader("vertex.glsl", GL_VERTEX_SHADER);
+	fragment = loadShader(fragmentsrc, GL_FRAGMENT_SHADER);
+	vertex = loadShader(vertexsrc, GL_VERTEX_SHADER);
 
 	program = glCreateProgram();
 	glAttachShader(program, vertex);
@@ -466,7 +469,11 @@ int main(int argc, char **argv)
 	printf("Renderer: %s\n", glGetString(GL_RENDERER));
 #endif
 
-	GLuint program = loadProgram();
+	char *fragsrc;
+	loadTextFile("fragment.glsl", &fragsrc);
+	char *vertsrc;
+	loadTextFile("vertex.glsl", &vertsrc);
+	GLuint program = loadProgram(fragsrc, vertsrc);
 	GLint peakloc = glGetUniformLocation(program, "peak");
 	glUseProgram(program);
 
@@ -504,10 +511,6 @@ int main(int argc, char **argv)
 			}
 		}
 
-		/*		if(peak > 0){
-					printf("Peak: %f\n", peak);
-					}*/
-
 		glClearColor(0, 0, 0, 1);
 		glClear(GL_COLOR_BUFFER_BIT);
 
@@ -518,6 +521,8 @@ int main(int argc, char **argv)
 		glBindVertexArray(0);
 
 		ccGLBuffersSwap();
+
+		ccTimeDelay(6);
 	}
 
 	fftw_destroy_plan(plan);
