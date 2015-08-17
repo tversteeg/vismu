@@ -11,7 +11,7 @@ all: vismu
 vismu: $(OBJS)
 	$(CC) -o vismu $(OBJS) $(LDFLAGS) 
 
-%.o: %.c %.h
+%.o: %.c
 	$(CC) -o $@ -c $(CFLAGS) $^
 
 clean:

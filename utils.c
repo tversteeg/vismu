@@ -1,4 +1,7 @@
 #include <math.h>
+#include <stdio.h>
+
+#include <ccore/file.h>
 
 #include "utils.h"
 
