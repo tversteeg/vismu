@@ -20,7 +20,7 @@ int loadTextFile(const char *file, char **result)
 	fread(*result, 1, fi.size, fp);
 	fclose(fp);
 
-	(*result)[fi.size] = '\0';
+	(*result)[fi.size - 1] = '\0';
 
 	return fi.size;
 }
