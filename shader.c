@@ -5,10 +5,10 @@
 #include "shader.h"
 #include "utils.h"
 
-#define SHADER_AMOUNT 3
-#define SHADER_START 2
+#define SHADER_AMOUNT 2
+#define SHADER_START 1
 #define SHADER_TIME 500
-#define TRANSITION_TIME 250.0
+#define TRANSITION_TIME 500.0
 
 typedef struct {
 	GLuint program;
@@ -106,6 +106,7 @@ void loadScreenTriangles(GLuint *vao, GLuint *vbo)
 
 GLuint vao, vbo, tex;
 int time, active;
+long totaltime;
 
 visprog_t progs[SHADER_AMOUNT];
 
@@ -146,6 +147,7 @@ void initVis()
 	
 	active = SHADER_START - 1;
 	time = TRANSITION_TIME;
+	totaltime = 0;
 
 	glUseProgram(progs[active].program);
 }
@@ -154,6 +156,7 @@ void renderVis(double peak)
 {
 	double transition = 0.0;
 	time++;
+	totaltime++;
 	if(time > SHADER_TIME){
 		active++;
 		if(active == SHADER_AMOUNT){
@@ -175,7 +178,7 @@ void renderVis(double peak)
 
 		glProgramUniform1f(progs[prev].program, progs[prev].peak, peak);
 		glProgramUniform1f(progs[prev].program, progs[prev].transition, 0);
-		glProgramUniform1f(progs[prev].program, progs[prev].time, time);
+		glProgramUniform1f(progs[prev].program, progs[prev].time, totaltime);
 		glProgramUniform1i(progs[prev].program, progs[prev].texture, 0);
 
 		glBindVertexArray(vao);
@@ -193,7 +196,7 @@ void renderVis(double peak)
 
 	glProgramUniform1f(progs[active].program, progs[active].peak, peak);
 	glProgramUniform1f(progs[active].program, progs[active].transition, transition);
-	glProgramUniform1f(progs[active].program, progs[active].time, time);
+	glProgramUniform1f(progs[active].program, progs[active].time, totaltime);
 
 	glBindVertexArray(vao);
 	glDrawArrays(GL_TRIANGLES, 0, 6);

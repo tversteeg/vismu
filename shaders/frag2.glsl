@@ -3,6 +3,8 @@
 precision highp float;
 #endif
 
+#pragma optionNV(unroll all)
+
 #define screenX 1.0/800
 #define screenY 1.0/600
 
@@ -15,37 +17,43 @@ uniform float time;
 
 uniform sampler2D tex;
 
-float hash(vec2 p)
+vec3 hsv(in float h, in float s, in float v)
 {
-	float h = dot(p, vec2(127.1,311.7));
-
-	return -1.0 + 2.0 * fract(sin(h) * 43758.5453123);
+	return mix(vec3(1.0), clamp((abs(fract(h + vec3(3, 2, 1) / 3.0) * 6.0 - 3.0) - 1.0), 0.0 , 1.0), s) * v;
 }
 
-float noise(in vec2 p)
+vec2 distanceToObj(in vec3 point)
 {
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-
-	vec2 u = f * f * (3.0 - 2.0 * f);
-
-	return mix(	mix(	hash(i + vec2(0.0,0.0)), 
-										hash(i + vec2(1.0,0.0)), u.x), 
-							mix(	hash(i + vec2(0.0,1.0)), 
-										hash(i + vec2(1.0,1.0)), u.x), u.y);
+	return vec2(point.y + 3.0, 0.0);
 }
 
 void main()
 {
-	vec4 prev = texture(tex, texCoord) * transition;
+	vec4 prev = texture(tex, texCoord) * (transition * transition);
 
-	vec4 cur = vec4(texCoord.x, texCoord.y, peak / 100000.0, 1.0);
+	float invtrans = 1.0 - transition;
 
-	float noiseval = 0.5 + 0.5 * noise(texCoord * 64.0);
+	float peaktime = time + peak / 10000.0;
 
-	cur.rgb *= vec3(noiseval);
+	vec3 col = vec3(0.0);
+	vec2 c = (time / 50.0) * vec2(0.065, -0.0534) * invtrans;
+	vec2 p = texCoord * 2.0 - 1.0;
+	p.x *= 800.0 / 600.0;
+	p *= 2.0;
 
-	cur *= 1.0 - transition;
+	float r = smoothstep(0.0, 0.2, sqrt(dot(p, p)));
 
-	color = cur + prev;
+	float dotp = dot(p, p);
+	for(int i = 0; i < 5; i++){
+		p = abs(mod(p / dotp + c, 2.0) - 1.0);
+
+		dotp = dot(p, p);
+		float sqrp = sqrt(dotp);
+		r *= smoothstep(0.0, 0.2, sqrp);
+		col += hsv(1.0 - max(p.x, p.y) * sqrp + peaktime / 120.0 + 2.0, 1.0 - sqrp, r);
+	}
+
+	col = 0.5 - cos(col) * 0.5 * invtrans;
+	
+	color = vec4(col * invtrans, 1.0) + prev;
 }

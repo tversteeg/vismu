@@ -3,8 +3,6 @@
 precision highp float;
 #endif
 
-#pragma optionNV(unroll all)
-
 #define screenX 1.0/800
 #define screenY 1.0/600
 
@@ -17,65 +15,37 @@ uniform float time;
 
 uniform sampler2D tex;
 
-vec2 distanceToObj(in vec3 point)
+float hash(vec2 p)
 {
-	return vec2(point.y + 3.0, 0.0);
+	float h = dot(p, vec2(127.1,311.7));
+
+	return -1.0 + 2.0 * fract(sin(h) * 43758.5453123);
+}
+
+float noise(in vec2 p)
+{
+	vec2 i = floor(p);
+	vec2 f = fract(p);
+
+	vec2 u = f * f * (3.0 - 2.0 * f);
+
+	return mix(	mix(	hash(i + vec2(0.0,0.0)), 
+										hash(i + vec2(1.0,0.0)), u.x), 
+							mix(	hash(i + vec2(0.0,1.0)), 
+										hash(i + vec2(1.0,1.0)), u.x), u.y);
 }
 
 void main()
 {
-	vec4 prev = texture(tex, texCoord / transition) * transition;
+	vec4 prev = texture(tex, texCoord) * transition;
 
-	// Camera
-	vec2 texscreen = texCoord * 2.0 - 1.0;
+	vec4 cur = vec4(texCoord.x, texCoord.y, peak / 100000.0, 1.0);
 
-	const vec3 up = vec3(0.0, 1.0, 0.0);
-	const vec3 lookat = vec3(0.0, 0.0, 0.0);
-	vec3 cam = vec3(-sin(time / 1000.0) * 8.0, 4.0, cos(time / 100.0) * 8.0);
+	float noiseval = 0.5 + 0.5 * noise(texCoord * 64.0);
 
-	vec3 p = normalize(lookat - cam);
-	vec3 u = normalize(cross(up, p));
-	vec3 v = cross(p, u);
-	vec3 cv = cam + p;
-	vec3 screen = cv + texscreen.x * u * (800.0 / 600.0) + texscreen.y * v;
-	vec3 screenp = normalize(screen - cam);
+	cur.rgb *= vec3(noiseval);
 
-	const vec3 e = vec3(0.1, 0.0, 0.0);
-	const float maxdepth = 60.0;
-	vec2 dis = vec2(0.1, 0.0);
-	
-	vec3 result, point;
-	float f = 1.0;
-	int i = 0;
-	while(true){
-		if(abs(dis.x) < 0.01 || f > maxdepth || i >= 10){
-			break;
-		}
+	cur *= 1.0 - transition;
 
-		f += dis.x;
-		point = cam + screenp * f;
-		dis = distanceToObj(p);
-
-		i++;
-	}
-
-	if(f < maxdepth){
-		if(dis.y == 0.0){
-			result = vec3(0.5, 0.5, 0.5);
-		}else{
-			result = vec3(0.0, 0.0, 0.0);
-		}
-
-		vec3 normal = normalize(vec3(dis.x - distanceToObj(point - e.xyy).x, 
-			dis.x - distanceToObj(point - e.yxy).x,
-			dis.x - distanceToObj(point - e.yyx).x));
-
-		float b = dot(normal, normalize(cam - point));
-
-		result = (b * result + pow(b, 8.0)) * (1.0 - f * 0.01);
-	}else{
-		result = vec3(0.0, 0.0, 0.0);
-	}
-	
-	color = vec4(result, 1.0) + prev;
+	color = cur + prev;
 }
