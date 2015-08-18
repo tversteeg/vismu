@@ -3,15 +3,13 @@
 precision highp float;
 #endif
 
-#define screenX 1.0/800
-#define screenY 1.0/600
-
 out vec4 color;
 in vec2 texCoord;
 
 uniform float peak;
 uniform float transition;
 uniform float time;
+uniform vec2 size;
 
 uniform sampler2D tex;
 
@@ -37,15 +35,46 @@ float noise(in vec2 p)
 
 void main()
 {
+	float peaktime = time + peak * 0.001;
+
 	vec4 prev = texture(tex, texCoord) * transition;
 
-	vec4 cur = vec4(texCoord.x, texCoord.y, peak / 100000.0, 1.0);
+	float invtrans = 1.0 - transition;
 
-	float noiseval = 0.5 + 0.5 * noise(texCoord * 64.0);
+	vec2 uv = texCoord * 2.0 - 1.0;
+	uv.x *= size.x / size.y;
+	uv *= sin(time / 200.0) * 0.9 + 1.0;
 
-	cur.rgb *= vec3(noiseval);
+	vec3 tot = vec3(0.0);
 
-	cur *= 1.0 - transition;
+	float sintime = sin(peaktime * 0.001) * 0.2 + 0.5;
+	vec4 p = vec4(uv, sintime, 1.0);
+	vec4 p2 = vec4(uv, sintime, 0.0);
+	vec4 p3 = vec4(uv, 0.5, 0.5);
 
-	color = cur + prev;
+	float fractime = 0.2 + cos(peaktime / 2000.0) * 0.1 + (prev.r * transition * 0.2);
+	for(int i = 0; i < 16; i++){
+		float len = length(p);
+		p = abs(p) / (len * len) - fractime;
+		tot.r += abs(length(p) - len);
+
+		len = length(p2);
+		p2 = abs(p2) / (len * len) - fractime + 0.1;
+		tot.g += abs(length(p2) - len);
+
+		len = length(p3);
+		p3 = abs(p3) / (len * len) - fractime + 0.05;
+		tot.b += abs(length(p3) - len);
+	}
+
+	vec3 b = -cos(tot / 3.0) * 0.5 + 0.5;
+	vec4 col = vec4(b, 1.0);
+
+	//float noiseval = 0.5 + 0.5 * noise(texCoord * 64.0);
+
+	//col.rgb *= vec3(noiseval);
+
+	col *= invtrans;
+
+	color = col + prev;
 }

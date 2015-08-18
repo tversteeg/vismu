@@ -7,12 +7,12 @@
 
 #define SHADER_AMOUNT 2
 #define SHADER_START 1
-#define SHADER_TIME 500
-#define TRANSITION_TIME 500.0
+#define SHADER_TIME 2000
+#define TRANSITION_TIME 1000.0
 
 typedef struct {
 	GLuint program;
-	GLint peak, transition, texture, time;
+	GLint peak, transition, texture, time, size;
 } visprog_t;
 
 GLuint loadShader(char *source, GLenum type)
@@ -105,12 +105,12 @@ void loadScreenTriangles(GLuint *vao, GLuint *vbo)
 }
 
 GLuint vao, vbo, tex;
-int time, active;
+int time, active, width, height;
 long totaltime;
 
 visprog_t progs[SHADER_AMOUNT];
 
-void initVis()
+void initVis(int screenwidth, int screenheight)
 {
 	glewInit();
 
@@ -123,7 +123,7 @@ void initVis()
 
 	glGenTextures(1, &tex);
 	glBindTexture(GL_TEXTURE_2D, tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screenwidth, screenheight, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -141,6 +141,7 @@ void initVis()
 		progs[i].transition = glGetUniformLocation(progs[i].program, "transition");
 		progs[i].time = glGetUniformLocation(progs[i].program, "time");
 		progs[i].texture = glGetUniformLocation(progs[i].program, "tex");
+		progs[i].size = glGetUniformLocation(progs[i].program, "size");
 	}
 
 	loadScreenTriangles(&vao, &vbo);
@@ -148,6 +149,9 @@ void initVis()
 	active = SHADER_START - 1;
 	time = TRANSITION_TIME;
 	totaltime = 0;
+
+	width = screenwidth;
+	height = screenheight;
 
 	glUseProgram(progs[active].program);
 }
@@ -179,6 +183,7 @@ void renderVis(double peak)
 		glProgramUniform1f(progs[prev].program, progs[prev].peak, peak);
 		glProgramUniform1f(progs[prev].program, progs[prev].transition, 0);
 		glProgramUniform1f(progs[prev].program, progs[prev].time, totaltime);
+		glProgramUniform2f(progs[prev].program, progs[prev].size, width, height);
 		glProgramUniform1i(progs[prev].program, progs[prev].texture, 0);
 
 		glBindVertexArray(vao);
@@ -197,6 +202,7 @@ void renderVis(double peak)
 	glProgramUniform1f(progs[active].program, progs[active].peak, peak);
 	glProgramUniform1f(progs[active].program, progs[active].transition, transition);
 	glProgramUniform1f(progs[active].program, progs[active].time, totaltime);
+	glProgramUniform2f(progs[active].program, progs[active].size, width, height);
 
 	glBindVertexArray(vao);
 	glDrawArrays(GL_TRIANGLES, 0, 6);

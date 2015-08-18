@@ -363,10 +363,10 @@ int main(int argc, char **argv)
 	fftw_plan plan = fftw_plan_dft_r2c_1d(BUFFER_SIZE, in, out, FFTW_MEASURE);
 
 	ccDisplayInitialize();
-	ccWindowCreate((ccRect){.x = 0, .y = 0, .width = 800, .height = 600}, "vismu", 0);
+	ccWindowCreate((ccRect){.x = 0, .y = 0, .width = 1280, .height = 1024}, "vismu", 0);
 	ccGLContextBind();
 
-	initVis();
+	initVis(1280, 1024);
 
 	bool loop = true;
 	while(loop){
