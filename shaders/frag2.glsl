@@ -20,11 +20,6 @@ vec3 hsv(in float h, in float s, in float v)
 	return mix(vec3(1.0), clamp((abs(fract(h + vec3(3, 2, 1) / 3.0) * 6.0 - 3.0) - 1.0), 0.0 , 1.0), s) * v;
 }
 
-vec2 distanceToObj(in vec3 point)
-{
-	return vec2(point.y + 3.0, 0.0);
-}
-
 void main()
 {
 	float peaktime = time + peak / 10000.0;

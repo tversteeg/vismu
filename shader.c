@@ -5,9 +5,9 @@
 #include "shader.h"
 #include "utils.h"
 
-#define SHADER_AMOUNT 2
-#define SHADER_START 1
-#define SHADER_TIME 2000
+#define SHADER_AMOUNT 3
+#define SHADER_START 3
+#define SHADER_TIME 4000
 #define TRANSITION_TIME 1000.0
 
 typedef struct {

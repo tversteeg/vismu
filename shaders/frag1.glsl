@@ -13,26 +13,6 @@ uniform vec2 size;
 
 uniform sampler2D tex;
 
-float hash(vec2 p)
-{
-	float h = dot(p, vec2(127.1,311.7));
-
-	return -1.0 + 2.0 * fract(sin(h) * 43758.5453123);
-}
-
-float noise(in vec2 p)
-{
-	vec2 i = floor(p);
-	vec2 f = fract(p);
-
-	vec2 u = f * f * (3.0 - 2.0 * f);
-
-	return mix(	mix(	hash(i + vec2(0.0,0.0)), 
-										hash(i + vec2(1.0,0.0)), u.x), 
-							mix(	hash(i + vec2(0.0,1.0)), 
-										hash(i + vec2(1.0,1.0)), u.x), u.y);
-}
-
 void main()
 {
 	float peaktime = time + peak * 0.001;
@@ -69,10 +49,6 @@ void main()
 
 	vec3 b = -cos(tot / 3.0) * 0.5 + 0.5;
 	vec4 col = vec4(b, 1.0);
-
-	//float noiseval = 0.5 + 0.5 * noise(texCoord * 64.0);
-
-	//col.rgb *= vec3(noiseval);
 
 	col *= invtrans;
 

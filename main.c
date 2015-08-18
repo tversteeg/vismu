@@ -26,6 +26,9 @@
 #define BUFFER_SIZE 2048
 #define LISTEN_BUFFER_SIZE 128
 
+#define WIDTH 1600
+#define HEIGHT 900
+
 typedef struct {
 	int format, out[BUFFER_SIZE];
 	unsigned int rate;
@@ -363,10 +366,10 @@ int main(int argc, char **argv)
 	fftw_plan plan = fftw_plan_dft_r2c_1d(BUFFER_SIZE, in, out, FFTW_MEASURE);
 
 	ccDisplayInitialize();
-	ccWindowCreate((ccRect){.x = 0, .y = 0, .width = 1280, .height = 1024}, "vismu", 0);
+	ccWindowCreate((ccRect){.x = 0, .y = 0, .width = WIDTH, .height = HEIGHT}, "vismu", 0);
 	ccGLContextBind();
 
-	initVis(1280, 1024);
+	initVis(WIDTH, HEIGHT);
 
 	bool loop = true;
 	while(loop){
