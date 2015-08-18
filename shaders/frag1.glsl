@@ -43,7 +43,7 @@ void main()
 
 	vec2 uv = texCoord * 2.0 - 1.0;
 	uv.x *= size.x / size.y;
-	uv *= sin(time / 200.0) * 0.9 + 1.0;
+	uv *= sin(time / 200.0) * 0.8 + 1.0;
 
 	vec3 tot = vec3(0.0);
 

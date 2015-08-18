@@ -112,6 +112,9 @@ visprog_t progs[SHADER_AMOUNT];
 
 void initVis(int screenwidth, int screenheight)
 {
+	width = screenwidth;
+	height = screenheight;
+
 	glewInit();
 
 #ifdef VISMU_DEBUG
@@ -123,7 +126,7 @@ void initVis(int screenwidth, int screenheight)
 
 	glGenTextures(1, &tex);
 	glBindTexture(GL_TEXTURE_2D, tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, screenwidth, screenheight, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, 0);
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
@@ -149,9 +152,6 @@ void initVis(int screenwidth, int screenheight)
 	active = SHADER_START - 1;
 	time = TRANSITION_TIME;
 	totaltime = 0;
-
-	width = screenwidth;
-	height = screenheight;
 
 	glUseProgram(progs[active].program);
 }
@@ -190,7 +190,7 @@ void renderVis(double peak)
 		glDrawArrays(GL_TRIANGLES, 0, 6);
 		glBindVertexArray(0);
 
-		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, 800, 600, 0);
+		glCopyTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 0, 0, width, height, 0);
 
 		glUseProgram(progs[active].program);
 		glProgramUniform1i(progs[active].program, progs[active].texture, 0);

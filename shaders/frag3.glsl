@@ -5,9 +5,6 @@ precision highp float;
 
 #pragma optionNV(unroll all)
 
-#define screenX 1.0/800
-#define screenY 1.0/600
-
 out vec4 color;
 in vec2 texCoord;
 
