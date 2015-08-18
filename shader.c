@@ -5,9 +5,10 @@
 #include "shader.h"
 #include "utils.h"
 
-#define SHADERS 2
-#define SHADER_TIME 400
-#define TRANSITION_TIME 100.0
+#define SHADER_AMOUNT 3
+#define SHADER_START 2
+#define SHADER_TIME 500
+#define TRANSITION_TIME 250.0
 
 typedef struct {
 	GLuint program;
@@ -106,7 +107,7 @@ void loadScreenTriangles(GLuint *vao, GLuint *vbo)
 GLuint vao, vbo, tex;
 int time, active;
 
-visprog_t progs[SHADERS];
+visprog_t progs[SHADER_AMOUNT];
 
 void initVis()
 {
@@ -130,7 +131,7 @@ void initVis()
 	glBindTexture(GL_TEXTURE_2D, tex);
 
 	int i;
-	for(i = 0; i < SHADERS; i++){
+	for(i = 0; i < SHADER_AMOUNT; i++){
 		char fragshadername[64];
 		snprintf(fragshadername, sizeof(fragshadername), "shaders/frag%d.glsl", i + 1);
 		progs[i].program = loadProgramFile(fragshadername, "shaders/vert.glsl");
@@ -143,10 +144,10 @@ void initVis()
 
 	loadScreenTriangles(&vao, &vbo);
 	
-	active = 1;
-	glUseProgram(progs[active].program);
+	active = SHADER_START - 1;
+	time = TRANSITION_TIME;
 
-	time = 0;
+	glUseProgram(progs[active].program);
 }
 
 void renderVis(double peak)
@@ -155,7 +156,7 @@ void renderVis(double peak)
 	time++;
 	if(time > SHADER_TIME){
 		active++;
-		if(active == SHADERS){
+		if(active == SHADER_AMOUNT){
 			active = 0;
 		}
 
@@ -165,7 +166,7 @@ void renderVis(double peak)
 	if(time <= TRANSITION_TIME){
 		transition = 1.0 - time / TRANSITION_TIME;
 
-		int prev = active > 0 ? active - 1 : SHADERS - 1;
+		int prev = active > 0 ? active - 1 : SHADER_AMOUNT - 1;
 		
 		glUseProgram(progs[prev].program);
 
