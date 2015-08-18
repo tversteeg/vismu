@@ -37,7 +37,7 @@ void main()
 	// Camera
 	vec2 texscreen = texCoord * 2.0 - 1.0;
 
-	vec3 c = vec3(0.0);
+	vec3 col = vec3(0.0);
 	vec2 p = texCoord * sin(time / 100.0) + 1.0;
 	float dotp = dot(p, p);
 
@@ -47,10 +47,10 @@ void main()
 		dotp = dot(p, p);
 		float sqrp = sqrt(dotp);
 
-		c += hsv(1.0 - max(p.x, p.y) * sqrp, 2.0 - sqrp, smoothstep(0.0, 0.2, sqrp));
+		col += hsv(1.0 - max(p.x, p.y) * sqrp, 2.0 - sqrp, smoothstep(0.0, 0.2, sqrp));
 	}
 
-	c = -cos(c) * 0.5 + 0.5;
+	col = -cos(col) * 0.5 + 0.5;
 	
-	color = vec4(c * invtrans, 1.0) + prev;
+	color = vec4(col * invtrans, 1.0) + prev;
 }
